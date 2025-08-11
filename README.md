@@ -1,8 +1,5 @@
-# neonMetabolizer
-neonMetabolizer is an in-development R package that is intended to pull [National Ecological Observatory Network (NEON)](http://www.neonscience.org/) data and model two-station stream metabolism. This package is __not__ a NEON or U.S. Geological Survey (USGS) product and is __not__ supported, maintained, or endorsed by these agencies.
-
-## Dependencies
-NEONmetabolizer relies on [@NEONScience](https://github.com/NEONScience)'s [`NEON-utilities`](https://github.com/NEONScience/NEON-utilities), [`localPressureDO`](https://github.com/NEONScience/NEON-water-quality/localPressureDO), and [`reaRate`](https://github.com/NEONScience/NEON-reaeration/reaRate) packages. NEON-metabolizer also uses some functions from [@USGS-R](https://github.com/USGS-R)'s [`streamMetabolizer`](https://github.com/USGS-R/streamMetabolizer) package. 
+# dodo
+dodo is an in-development R package for modeling stream metabolism from two-station dissolved oxygen (DO) data.
 
 ## What does it do?
 
@@ -15,7 +12,4 @@ NEONmetabolizer relies on [@NEONScience](https://github.com/NEONScience)'s [`NEO
     - K600 and travel time between sensor stations are extrapolated for each time point using the relationship between field measurements and discharge 
     - Column names and formatting are changed to jive with `streamMetabolizer`'s requirements for metabolism modeling
 3. Model metabolism
-    - Functions for this step are in active development - see notes below!
-
-## Disclaimer
-This package is __not__ a product of NEON or USGS, and is __not__ supported, maintained, or endorsed by these agencies.
+    - Functions for this step are in active development
