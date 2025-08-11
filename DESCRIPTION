@@ -1,5 +1,5 @@
-Package: neonMetabolizer
-Title: Model Two-Station Stream Metabolism from NEON Science Data
+Package: dodo
+Title: Model Two-Station Stream Metabolism
 Version: 0.1.1
 Date: 2022-09-30
 Authors@R: 
