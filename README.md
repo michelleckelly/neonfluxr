@@ -1,7 +1,5 @@
 # `neonfluxr`
-`neonfluxr` is an R package for pulling & reformatting NEON (https://data.neonscience.org/) river data for two-station metabolism modeling. 
-
-`neonfluxr` is intended for use in conjunction with the `fluxr` package (https://github.com/michelleckelly/fluxr).
+`neonfluxr` is a wrapper package for [`neonUtilities`](https://cran.r-project.org/web/packages/neonUtilities/index.html) that grabs raw data for two-station stream metabolism modeling from [NEON](https://data.neonscience.org/) and formats it for use with the [`fluxr`](https://github.com/michelleckelly/fluxr) two-station metabolism modeling package.
 
 ## What does it do?
 
