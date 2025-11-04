@@ -1,4 +1,4 @@
-Package: dodo
+Package: neonfluxr
 Title: Model Two-Station Stream Metabolism
 Version: 0.1.1
 Date: 2022-09-30
@@ -11,7 +11,7 @@ BugReports: https://github.com/michelleckelly/neonMetabolizer/issues
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.1
+RoxygenNote: 7.3.2
 Imports: lubridate,
     mcmc,
     dplyr,
@@ -21,4 +21,3 @@ Imports: lubridate,
     magrittr
 Remotes: NEONScience/NEON-utilities/neonUtilities/,
     NEONScience/NEON-reaeration/reaRate/
-
