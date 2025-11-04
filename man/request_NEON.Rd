@@ -4,10 +4,10 @@
 \alias{request_NEON}
 \title{Request data products from NEON API for two-station metabolism modeling}
 \usage{
-request_NEON(NEONsites, startdate, enddate, reaerationPlotPath)
+request_NEON(sitecode, startdate, enddate, interval = 15, expanded = FALSE)
 }
 \arguments{
-\item{NEONsites}{character string specifying 4-letter NEON site code to
+\item{sitecode}{character string specifying 4-letter NEON site code to
 request data from (ex. \code{"HOPB"}). Can be more than one site
 (ex.\code{c("HOPB", "BLDE")} but be warned data pull will take longer)}
 
@@ -16,13 +16,6 @@ data request}
 
 \item{enddate}{YYYY-MM character string defining end year and month for
 data request}
-
-\item{reaerationPlotPath}{string containing file path for where to save travel time plots,
-ex. \code{reaerationPlotPath = paste0(getwd(), "/data/rawData/reaerationPlots/")}}
-}
-\value{
-List of four dataframes, \code{data}, \code{k600_clean}, \code{k600_fit}, and
-\code{k600_expanded}. NOTE: Explain in detail what these dataframes contain.
 }
 \description{
 \code{request_NEON} communicates with NEON API to request DO,
@@ -46,17 +39,7 @@ the user to model two-station stream metabolism,
 (3) \code{k600_fit}: describe here,
 (4) \code{k600_expanded}: describe here.
 }
-\examples{
-\dontrun{
-data <- request_NEON(NEONsites = "HOPB", startdate = "2018-01", enddate = "2018-12")
-}
-
-}
 \seealso{
 \url{https://github.com/NEONScience/NEON-utilities/neonUtilities/}
-for details on \code{neonUtilities} package,
-\url{https://github.com/NEONScience/NEON-water-quality/localPressureDO}
-for details on \code{localPressureDO} package,
-\url{https://github.com/NEONScience/NEON-reaeration/reaRate} for details
-on \code{reaRate} package.
+for details on \code{neonUtilities} package
 }
