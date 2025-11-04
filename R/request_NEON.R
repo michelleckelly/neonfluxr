@@ -22,307 +22,272 @@
 #'
 #' @importFrom magrittr %>%
 #'
-#' @param NEONsites character string specifying 4-letter NEON site code to
+#' @param sitecode character string specifying 4-letter NEON site code to
 #'   request data from (ex. `"HOPB"`). Can be more than one site
 #'   (ex.`c("HOPB", "BLDE")` but be warned data pull will take longer)
 #' @param startdate YYYY-MM character string defining start year and month for
 #'    data request
 #' @param enddate YYYY-MM character string defining end year and month for
 #'    data request
-#' @param reaerationPlotPath string containing file path for where to save travel time plots,
-#'    ex. `reaerationPlotPath = paste0(getwd(), "/data/rawData/reaerationPlots/")`
-#'
-#' @return List of four dataframes, `data`, `k600_clean`, `k600_fit`, and
-#'    `k600_expanded`. NOTE: Explain in detail what these dataframes contain.
 #'
 #' @seealso \url{https://github.com/NEONScience/NEON-utilities/neonUtilities/}
-#'    for details on \code{neonUtilities} package,
-#'    \url{https://github.com/NEONScience/NEON-water-quality/localPressureDO}
-#'    for details on \code{localPressureDO} package,
-#'    \url{https://github.com/NEONScience/NEON-reaeration/reaRate} for details
-#'    on \code{reaRate} package.
-#'
-#' @examples
-#' \dontrun{
-#' data <- request_NEON(NEONsites = "HOPB", startdate = "2018-01", enddate = "2018-12")
-#' }
+#'    for details on \code{neonUtilities} package
 #'
 #' @export
-request_NEON <- function(NEONsites, startdate, enddate, reaerationPlotPath){
-  #### Input parameters ######################################################
-  # Define parameters of interest necessary for metabolism modeling
-  params <- c("DP1.20288.001", "DP1.20053.001", "DP1.00024.001",
-              "DP1.20033.001", "DP4.00130.001", "DP1.20093.001",
-              "DP1.20072.001", "DP1.00004.001")
-  names(params) <- c("WaterQual", "Temp", "PAR",
-                     "NO3", "Discharge", "WaterChem",
-                     "AquaticPlants", "Barometer")
+request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded = FALSE){
+  # Input parameters for metabolism modeling
+  params <- c("DP1.20288.001", "DP1.20053.001", "DP1.00024.001", "DP4.00130.001",
+              "DP1.00004.001")
+  names <- c("waterqual", "temp", "par", "discharge", "barometer")
+  names(params) <- names
 
-  #### Pull NEON data from api ##################################################
+  if(expanded){
+    params <- c(params, "DP1.20033.001", "DP1.20093.001", "DP1.20072.001")
+    names(params) <- c(names, "no3", "waterchem", "aquatictransects")
+  }
+
+  # Pull NEON data from api
   for (i in seq_along(params)){
-    # Set dpID to i-th parameter
     dpID <- params[i]
 
     # Pull NEON data for parameter, saving the data to the variable name from
     # names(params)
     # Pull basic only to save time
     assign(names(dpID),
-           value = neonUtilities::loadByProduct(dpID = dpID, site = NEONsites,
-                                                startdate = startdate, enddate = enddate,
-                                                package = "basic", check.size = F))
+           tryCatch({
+             neonUtilities::loadByProduct(dpID = dpID, site = sitecode,
+                                          startdate = startdate,
+                                          enddate = enddate,
+                                          package = "basic",
+                                          check.size = F)
+             },
+             error = function(err){
+               NA
+               }))
   }
 
-  # Pull reaeration data from full period of record
-  Reaeration <- neonUtilities::loadByProduct(dpID = "DP1.20190.001",
-                                             site = NEONsites,
-                                             package = "expanded",
-                                             check.size = F)
-  FieldDischarge <- neonUtilities::loadByProduct(dpID = "DP1.20048.001",
-                                                 site = NEONsites,
-                                                 package = "expanded",
-                                                 check.size = F)
-
-  # NOTE: as of 18-Jan-2022, Water Quality data product now includes local DO
-  # percent saturation. Therefore, correcting dissolved oxygen percent saturation
-  # using localPressureDO package is unneeded.
-
-  #### Format and merge dataframes ##############################################
-  # S1 = upstream, S2 = downstream
-  ### Nitrate ###
-  NO3_data <-
-    NO3$NSW_15_minute %>%
-    dplyr::select(siteID, startDateTime, surfWaterNitrateMean) %>%
-    dplyr::mutate(startDateTime = lubridate::with_tz(startDateTime,
-                                                     tz = "UTC")) %>%
-    dplyr::rename(DateTime_UTC = startDateTime,
-                  Nitrate_uMolL = surfWaterNitrateMean)
-
-  ### Water quality ###
-  WQ_data <-
-    WaterQual$waq_instantaneous %>%
-    dplyr::select(siteID, horizontalPosition, startDateTime,
-                  specificConductance, dissolvedOxygen,
-                  seaLevelDissolvedOxygenSat,
-                  localDissolvedOxygenSat, pH, chlorophyll, turbidity) %>%
-    dplyr::mutate(horizontalPosition = dplyr::recode(horizontalPosition,
-                                                     "101" = "S1",
-                                                     "102" = "S2"),
+  # Format water quality data
+  wq_data <-
+    waterqual$waq_instantaneous %>%
+    select(siteID, horizontalPosition, startDateTime,
+                  dissolvedOxygen, localDissolvedOxygenSat, pH, chlorophyll,
+                  turbidity, specificConductance) %>%
+    mutate(horizontalPosition = dplyr::recode(horizontalPosition,
+                                              "101" = "upstream",
+                                              "110" = "upstream",
+                                              "100" = "upstream",
+                                              "102" = "downstream",
+                                              "200" = "downstream",
+                                              "101" = "upstream",
+                                              "S1" = "upstream",
+                                              "S2" = "downstream"),
                   startDateTime = lubridate::with_tz(startDateTime,
                                                      tz = "UTC")) %>%
-    dplyr::rename(DateTime_UTC = startDateTime, DO_mgL = dissolvedOxygen,
-                  chlorophyll_ugL = chlorophyll, turbidity_NTU = turbidity,
-                  specificConductance_uScm = specificConductance) %>%
-    dplyr::filter(lubridate::minute(DateTime_UTC) %in% c(0, 15, 30, 45))
+    rename(datetime_UTC = startDateTime,
+           location = horizontalPosition, DO.obs_mgL = dissolvedOxygen,
+           DO.sat_mgL = localDissolvedOxygenSat, chlorophyll_ugL = chlorophyll,
+           turbidity_NTU = turbidity, specificConductance_uScm = specificConductance)
 
-  ### Water chem ###
-  WC_data <-
-    WaterChem$swc_externalLabDataByAnalyte %>%
-    dplyr::select(siteID, namedLocation, startDate,
-                  analyte, analyteConcentration, analyteUnits) %>%
-    dplyr::mutate(namedLocation = stringr::str_extract(string = namedLocation,
-                                                       pattern = "\\w\\d$"),
-                  analyteUnits = dplyr::recode(analyteUnits,
-                                               "milligramsPerLiter" = "_mgL"),
-                  analyteUnits = tidyr::replace_na(analyteUnits, ""),
-                  analyte = paste0(analyte, analyteUnits)) %>%
-    dplyr::select(siteID, namedLocation, startDate, analyte, analyteConcentration) %>%
-    tidyr::pivot_wider(names_from = analyte, values_from = analyteConcentration,
-                       values_fn = mean) %>%
-    dplyr::rename(NO3NO2_mgNL = `NO3+NO2 - N_mgL`, NH4_mgNL = `NH4 - N_mgL`) %>%
-    dplyr::mutate(DIN_mgNL = NO3NO2_mgNL + NH4_mgNL,
-                  DIN_molNL = DIN_mgNL / 10^6 / 14,
-                  TDP_molL = TDP_mgL / 10^6 / 30)
+  if(!expanded){
+    wq_data <-
+      wq_data %>%
+      select(-chlorophyll_ugL, -turbidity_NTU, -specificConductance_uScm)
+  }
 
-  ### Pull percent cover from Aquatic Plant data ###
-  coverData <-
-    AquaticPlants$apc_pointTransect %>%
-    dplyr::select(siteID, pointNumber, transectDistance, collectDate,
-                  habitatType, substrate, remarks) %>%
-    dplyr::filter(collectDate >=
-                    lubridate::ymd_hms(paste0(startdate, "-01 00:00:00"),
-                                       tz = lubridate::tz(collectDate)) &
-                    collectDate <=
-                    lubridate::ymd_hms(paste0(enddate, "-01 00:00:00"),
-                                       tz = lubridate::tz(collectDate))) %>%
-    dplyr::group_by(siteID, pointNumber) %>%
-    dplyr::arrange(transectDistance, .by_group = TRUE)
+  # Format temperature data
+  temp_data <-
+    temp$TSW_5min %>%
+    select(siteID, horizontalPosition, startDateTime, surfWaterTempMean) %>%
+    mutate(horizontalPosition = recode(horizontalPosition,
+                                       "101" = "upstream",
+                                       "110" = "upstream",
+                                       "100" = "upstream",
+                                       "102" = "downstream",
+                                       "200" = "downstream",
+                                       "101" = "upstream",
+                                       "S1" = "upstream",
+                                       "S2" = "downstream"),
+           startDateTime = lubridate::with_tz(startDateTime, tz = "UTC")) %>%
+    rename(datetime_UTC = startDateTime, watertemp_C = surfWaterTempMean,
+           location = horizontalPosition)
 
-  percCover_full <-
-    coverData %>%
-    dplyr::count(substrate) %>%
-    dplyr::rename(transect = pointNumber, observationCount = n) %>%
-    dplyr::mutate(sumObservations = sum(observationCount),
-                  percentCover = observationCount / sumObservations * 100)
+  # Format air pressure
+  press_data <-
+    barometer$BP_1min %>%
+    select(siteID, horizontalPosition, startDateTime, staPresMean) %>%
+    mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
+           horizontalPosition = recode(horizontalPosition,
+                                       "101" = "upstream",
+                                       "110" = "upstream",
+                                       "100" = "upstream",
+                                       "102" = "downstream",
+                                       "200" = "downstream",
+                                       "101" = "upstream",
+                                       "S1" = "upstream",
+                                       "S2" = "downstream")) %>%
+    rename(datetime_UTC = startDateTime, pressure_kPa = staPresMean,
+           location = horizontalPosition)
 
-  percCover_summary <-
-    percCover_full %>%
-    dplyr::select(transect, substrate, percentCover) %>%
-    tidyr::pivot_wider(names_from = substrate, values_from = percentCover) %>%
-    #dplyr::rename(coarseWoodyDebris = CWD, leafLitter = `leaf litter`) %>%
-    replace(is.na(.), 0) %>%
-    dplyr::ungroup(transect) %>%
-    dplyr::select(-transect) %>%
-    dplyr::summarise_all(mean)
+  # Format discharge and water depth
+  if(!all(is.na(discharge))){
+    discharge_data <-
+      discharge$csd_continuousDischarge %>%
+      select(siteID, endDate, stationHorizontalID, equivalentStage,
+             maxpostDischarge) %>%
+      mutate(endDate = lubridate::with_tz(endDate, tz = "UTC"),
+             stationHorizontalID = recode(stationHorizontalID,
+                                          "101" = "upstream",
+                                          "110" = "upstream",
+                                          "100" = "upstream",
+                                          "102" = "downstream",
+                                          "200" = "downstream",
+                                          "132" = "downstream",
+                                          "131" = "downstream",
+                                          "101" = "upstream",
+                                          "S1" = "upstream",
+                                          "S2" = "downstream"),
+             # convert discharge, measured as L/s, to m3/s
+             maxpostDischarge = maxpostDischarge / 1000) %>%
+      rename(datetime_UTC = endDate, depth_m = equivalentStage,
+             discharge_m3s = maxpostDischarge,
+             location = stationHorizontalID)
+  }
 
-  ### Temp ###
-  Temp_data <-
-    Temp$TSW_5min %>%
-    dplyr::select(siteID, horizontalPosition, startDateTime,
-                  surfWaterTempMean) %>%
-    dplyr::mutate(horizontalPosition = dplyr::recode(horizontalPosition,
-                                                     "101" = "S1",
-                                                     "102" = "S2"),
-                  startDateTime = lubridate::with_tz(startDateTime,
-                                                     tz = "UTC")) %>%
-    dplyr::rename(DateTime_UTC = startDateTime,
-                  WaterTemp_C = surfWaterTempMean) %>%
-    dplyr::filter(lubridate::minute(DateTime_UTC) %in% c(0, 15, 30, 45))
+  # Format light
+  par_data <-
+    par$PARPAR_1min %>%
+    select(siteID, horizontalPosition, startDateTime, PARMean) %>%
+    mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
+           horizontalPosition = recode(horizontalPosition,
+                                       "101" = "upstream",
+                                       "110" = "upstream",
+                                       "100" = "upstream",
+                                       "102" = "downstream",
+                                       "200" = "downstream",
+                                       "101" = "upstream",
+                                       "S1" = "upstream",
+                                       "S2" = "downstream")) %>%
+    rename(datetime_UTC = startDateTime, par_umolm2s = PARMean,
+           location = horizontalPosition)
 
-  ### Air pressure ###
-  AirPres_data <-
-    Barometer$BP_1min %>%
-    dplyr::select(siteID, startDateTime, staPresMean) %>%
-    dplyr::mutate(startDateTime = lubridate::with_tz(startDateTime,
-                                                     tz = "UTC")) %>%
-    dplyr::rename(DateTime_UTC = startDateTime, AirPres_kPa = staPresMean) %>%
-    dplyr::filter(lubridate::minute(DateTime_UTC) %in% c(0, 15, 30, 45))
+  # Cut to just 15-min measurements
+  if(interval == 15){
+    wq_data <- filter(wq_data, minute(datetime_UTC) %in% c(0, 15, 30, 45))
+    temp_data <- filter(temp_data, minute(datetime_UTC) %in% c(0, 15, 30, 45))
+    press_data <- filter(press_data, minute(datetime_UTC) %in% c(0, 15, 30, 45))
+    discharge_data <- filter(discharge_data, minute(datetime_UTC) %in% c(0, 15, 30, 45))
+    par_data <- filter(par_data, minute(datetime_UTC) %in% c(0, 15, 30, 45))
+  }
 
-  ### Discharge & Depth ###
-  Discharge_data <-
-    Discharge$csd_continuousDischarge %>%
-    dplyr::select(siteID, endDate, calibratedPressure, equivalentStage,
-                  maxpostDischarge) %>%
-    dplyr::mutate(endDate = lubridate::with_tz(endDate, tz = "UTC"),
-                  maxpostDischarge = maxpostDischarge / 1000) %>% # convert discharge, measured as L/s, to m3/s
-    dplyr::rename(DateTime_UTC = endDate, WaterPres_kPa = calibratedPressure,
-                  Depth_m = equivalentStage, Discharge_m3s = maxpostDischarge) %>%
-    dplyr::filter(lubridate::minute(DateTime_UTC) %in% c(0, 15, 30, 45))
-
-  ### Light ###
-  PAR_data <-
-    PAR$PARPAR_1min %>%
-    dplyr::select(siteID, startDateTime, PARMean) %>%
-    dplyr::mutate(startDateTime = lubridate::with_tz(startDateTime,
-                                                     tz = "UTC")) %>%
-    dplyr::rename(DateTime_UTC = startDateTime, Light_PAR = PARMean) %>%
-    dplyr::filter(lubridate::minute(DateTime_UTC) %in% c(0, 15, 30, 45))
-
-  ### Merge all into data dataframe ###
-  data <- dplyr::full_join(WQ_data, NO3_data, by = c("siteID","DateTime_UTC"))
-  data <- dplyr::full_join(data, Temp_data,
-                           by = c("siteID","horizontalPosition","DateTime_UTC"))
-  data <- dplyr::full_join(data, AirPres_data, by = c("siteID","DateTime_UTC"))
-  data <- dplyr::full_join(data, Discharge_data, by = c("siteID","DateTime_UTC"))
-  data <- dplyr::full_join(data, PAR_data, by = c("siteID","DateTime_UTC"))
-
-  ### Convert datetime to chron solartime ###
-  # Grab longitude of currently in use sensor stations
-  sensorPos <-
-    WaterQual$sensor_positions_20288 %>%
-    dplyr::filter(referenceEnd == "") %>%
-    dplyr::select(siteID, HOR.VER, referenceLongitude) %>%
-    dplyr::mutate(HOR.VER = regmatches(HOR.VER, regexpr(pattern = "^\\d{3}",
-                                                        text = HOR.VER)),
-                  HOR.VER = dplyr::recode(HOR.VER, "101" = "S1", "102" = "S2")) %>%
-    dplyr::filter(HOR.VER == "S1" | HOR.VER == "S2") %>%
-    dplyr::rename(horizontalPosition = HOR.VER)
-
-  # Add longitude for use in solartime conversion
-  data <- dplyr::full_join(data, sensorPos, by = c("siteID","horizontalPosition"))
-
-  #################### Reaeration Rate (K) Calculations #########################
-  # Format reaeration data product
-  Reaeration_data <-
-    reaRate::def.format.reaeration(rea_backgroundFieldCondData =
-                                     Reaeration$rea_backgroundFieldCondData,
-                                   rea_backgroundFieldSaltData =
-                                     Reaeration$rea_backgroundFieldSaltData,
-                                   rea_fieldData =
-                                     Reaeration$rea_fieldData,
-                                   rea_plateauMeasurementFieldData =
-                                     Reaeration$rea_plateauMeasurementFieldData,
-                                   rea_plateauSampleFieldData =
-                                     Reaeration$rea_plateauSampleFieldData,
-                                   rea_externalLabDataSalt =
-                                     Reaeration$rea_externalLabDataSalt,
-                                   rea_externalLabDataGas =
-                                     Reaeration$rea_externalLabDataGas,
-                                   rea_widthFieldData =
-                                     Reaeration$rea_widthFieldData,
-                                   dsc_fieldData = FieldDischarge$dsc_fieldData,
-                                   dsc_individualFieldData =
-                                     FieldDischarge$dsc_individualFieldData,
-                                   dsc_fieldDataADCP =
-                                     FieldDischarge$dsc_fieldDataADCP,
-                                   waq_instantaneous = WaterQual$waq_instantaneous)
-
-  tryCatch(
-    {
-      # Run calculation for SF6 loss rates from raw gas data
-      Reaeration_clean <- reaRate::gas.loss.rate.plot(inputFile = Reaeration_data,
-                                                      savePlotPath = reaerationPlotPath)
-      # Calculate travel times
-      Reaeration_travelTimes <- reaRate::def.calc.trvl.time(inputFile = Reaeration_clean,
-                                                            loggerData = Reaeration$rea_conductivityFieldData,
-                                                            plot = TRUE)
-      # Calculate k600 based on SF6 loss rates
-      ReaerationRates <- reaRate::def.calc.reaeration(inputFile = Reaeration_travelTimes$outputDF,
-                                                      lossRateSF6 = "slopeClean",
-                                                      outputSuffix = "clean")
-
-      # Assemble output dataframes
-      reaeration_data <- Reaeration_clean
-      k600_expanded <- Reaeration_travelTimes
-      k600 <- ReaerationRates
-
-      # Remove K estimates that are less than 0
-      k600_clean <- k600[which(k600$k600.clean > 0),]
-
-      # Linear model of Q vs K600
-      lmk600 <- lm(k600.clean ~ meanQ_cms, data = k600_clean)
-
-      # Plot
-      plot(x = k600_clean$meanQ_cms, y = k600_clean$k600.clean,
-           main = paste0(unique(k600_clean$siteID),
-                         ": Mean Q Against Estimated k600"),
-           xlab = "Mean Q", ylab = "k600")
-      abline(lmk600, lty = 2, col = "red")
-      mtext(paste0("k600 = ", round(summary(lmk600)$coefficients[1], 3), " + ",
-                   round(summary(lmk600)$coefficients[2], 3), " * MeanQ, ",
-                   "R^2 = ", round(summary(lmk600)$r.squared, 3), side = 3),
-            col = "red")
-
-    },
-    error = function(condition){
-      # Output error message if there is no reaeration data available
-      message("> ERROR: Gas loss rate plots could not be made for reaeration data, \n   as no injection types include gas releases. ")
+  if(expanded){
+    if(!all(is.na(no3))){
+      # Format nitrate data
+      no3_data <-
+        no3$NSW_15_minute %>%
+        select(siteID, horizontalPosition, startDateTime, surfWaterNitrateMean) %>%
+        mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
+               horizontalPosition = recode(horizontalPosition,
+                                           "101" = "upstream",
+                                           "110" = "upstream",
+                                           "100" = "upstream",
+                                           "102" = "downstream",
+                                           "200" = "downstream",
+                                           "101" = "upstream",
+                                           "S1" = "upstream",
+                                           "S2" = "downstream")) %>%
+        rename(datetime_UTC = startDateTime, location = horizontalPosition,
+               nitrate_umolL = surfWaterNitrateMean)
     }
+    if(!all(is.na(waterchem))){
+      wc_data <-
+        waterchem$swc_externalLabDataByAnalyte %>%
+        select(siteID, namedLocation, startDate, analyte, analyteConcentration,
+               analyteUnits, sampleCondition) %>%
+        mutate(namedLocation = stringr::str_extract(string = namedLocation,
+                                                    pattern = "\\w\\d$"),
+               namedLocation = recode(namedLocation,
+                                      "101" = "upstream",
+                                      "110" = "upstream",
+                                      "100" = "upstream",
+                                      "102" = "downstream",
+                                      "200" = "downstream",
+                                      "101" = "upstream",
+                                      "S1" = "upstream",
+                                      "S2" = "downstream")) %>%
+        rename(location = namedLocation)
+    }
+    if(!all(is.na(aquatictransects))){
+      transect_data <-
+        aquatictransects$apc_pointTransect %>%
+        select(siteID, namedLocation, pointNumber, transectDistance,
+               collectDate, habitatType, substrate, remarks) %>%
+        group_by(siteID, namedLocation, pointNumber) %>%
+        arrange(transectDistance, .by_group = TRUE)
+
+      ##NOTE this is for calculating percent cover - build this in to another function
+      #percCover_full <-
+      # coverData %>%
+      #dplyr::count(substrate) %>%
+      #dplyr::rename(transect = pointNumber, observationCount = n) %>%
+      #dplyr::mutate(sumObservations = sum(observationCount),
+      #             percentCover = observationCount / sumObservations * 100)
+
+      #percCover_summary <-
+      # percCover_full %>%
+      #dplyr::select(transect, substrate, percentCover) %>%
+      #tidyr::pivot_wider(names_from = substrate, values_from = percentCover) %>%
+      #dplyr::rename(coarseWoodyDebris = CWD, leafLitter = `leaf litter`) %>%
+      #replace(is.na(.), 0) %>%
+      #dplyr::ungroup(transect) %>%
+      #dplyr::select(-transect) %>%
+      #dplyr::summarise_all(mean)
+    }
+  }
+
+  # Join metabolism parameters into params dataframe
+  params <-
+    full_join(wq_data, temp_data, by = c("siteID","location", "datetime_UTC")) %>%
+    full_join(., press_data, by = c("siteID","location", "datetime_UTC")) %>%
+    full_join(., discharge_data, by = c("siteID","location", "datetime_UTC")) %>%
+    full_join(., par_data, by = c("siteID","location", "datetime_UTC"))
+
+  # Grab average sensor longitude for upstream and downstream locations
+  lat_upstream <- mean(
+    waterqual$sensor_positions_20288$locationReferenceLatitude[
+      str_detect(waterqual$sensor_positions_20288$HOR.VER, "101")]
+  )
+  long_upstream <- mean(
+    waterqual$sensor_positions_20288$locationReferenceLongitude[
+      str_detect(waterqual$sensor_positions_20288$HOR.VER, "101")]
+    )
+  elev_upstream <- mean(
+    waterqual$sensor_positions_20288$locationReferenceElevation[
+      str_detect(waterqual$sensor_positions_20288$HOR.VER, "101")]
   )
 
-  # If tryCatch returned error because there was no gas injections, populate
-  # k600 values with NA
-  if(!exists("reaeration_data")){
-    k600_clean <- NA
-    k600_fit <- NA
-    k600_expanded <- NA
-    reaeration_data <- "No gas injection data available at site"
-  }
+  lat_downstream <- mean(
+    waterqual$sensor_positions_20288$locationReferenceLatitude[
+      str_detect(waterqual$sensor_positions_20288$HOR.VER, "102")]
+  )
+  long_downstream <- mean(
+    waterqual$sensor_positions_20288$locationReferenceLongitude[
+      str_detect(waterqual$sensor_positions_20288$HOR.VER, "102")]
+  )
+  elev_downstream <- mean(
+    waterqual$sensor_positions_20288$locationReferenceElevation[
+      str_detect(waterqual$sensor_positions_20288$HOR.VER, "102")]
+  )
 
-  ################### Output data to user #######################################
-  # Remove dataframes from the environment that are generated within the
-  # functions
-  suppressWarnings(rm(list = c("readme_20288", "sensor_positions_20288",
-                               "variables_20288","waq_instantaneous"),
-                      envir = .GlobalEnv))
+  # Output
+  list(
+    metabolism.parameters = params,
+    no3 = if(exists("no3_data")) no3_data else NA,
+    waterchemistry = if(exists("wc_data")) wc_data else NA,
+    transects = if(exists("transect_data")) transect_data else NA,
+    upstream = c(latitude = lat_upstream, longitude = long_upstream,
+                 elevation = elev_upstream),
+    downstream = c(latitude = lat_downstream, longitude = long_downstream,
+                   elevation = elev_downstream)
+  )
 
-  # Output to user
-  output <- list(data = data,
-                 waterQual = WC_data,
-                 percentCover = percCover_summary,
-                 k600_clean = k600_clean,
-                 k600_fit = lmk600,
-                 k600_expanded = k600_expanded,
-                 reaeration_data = reaeration_data)
-
-  return(output)
 }
