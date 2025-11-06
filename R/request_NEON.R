@@ -66,27 +66,42 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
                }))
   }
 
+  # To get the distance between S1 and S2, need to pull geomorphology data
+  # Geomorphology surveys are only done once every 5 years, so pull all the
+  # data that's available, rather than just for the period of interest
+  geomorph <-
+    neonUtilities::loadByProduct(dpID = "DP4.00131.001",
+                                 site = sitecode,
+                                 package = "basic",
+                                 check.size = F)
+  # Format geomorphology data
+  geo_data <-
+    geomorph$geo_surveySummary %>%
+    filter(surveyBoutTypeID == "geomorphology") %>%
+    select(siteID, eventID, startDate, meanBankfullWidth, S1habitatID,
+           S2habitatID, sensorSetLength) %>%
+    rename(datetime_UTC = startDate,
+           habitatID_upstream = S1habitatID,
+           habitatID_downstream = S2habitatID,
+           distance_between_sensors_m = sensorSetLength)
+
   # Format water quality data
   wq_data <-
     waterqual$waq_instantaneous %>%
     select(siteID, horizontalPosition, startDateTime,
                   dissolvedOxygen, localDissolvedOxygenSat, pH, chlorophyll,
                   turbidity, specificConductance) %>%
-    mutate(horizontalPosition = dplyr::recode(horizontalPosition,
-                                              "101" = "upstream",
-                                              "110" = "upstream",
-                                              "100" = "upstream",
-                                              "102" = "downstream",
-                                              "200" = "downstream",
-                                              "101" = "upstream",
-                                              "S1" = "upstream",
-                                              "S2" = "downstream"),
-                  startDateTime = lubridate::with_tz(startDateTime,
-                                                     tz = "UTC")) %>%
+    mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
+           startDateTime = round_date(startDateTime, unit = "minute")) %>%
     rename(datetime_UTC = startDateTime,
            location = horizontalPosition, DO.obs_mgL = dissolvedOxygen,
            DO.sat_mgL = localDissolvedOxygenSat, chlorophyll_ugL = chlorophyll,
-           turbidity_NTU = turbidity, specificConductance_uScm = specificConductance)
+           turbidity_NTU = turbidity,
+           specificConductance_uScm = specificConductance)
+  wq_data$location <-
+    str_replace_all(wq_data$location,
+                    c("100|101|110|S1" = "upstream",
+                      "102|200|S2" = "downstream"))
 
   if(!expanded){
     wq_data <-
@@ -98,35 +113,28 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
   temp_data <-
     temp$TSW_5min %>%
     select(siteID, horizontalPosition, startDateTime, surfWaterTempMean) %>%
-    mutate(horizontalPosition = recode(horizontalPosition,
-                                       "101" = "upstream",
-                                       "110" = "upstream",
-                                       "100" = "upstream",
-                                       "102" = "downstream",
-                                       "200" = "downstream",
-                                       "101" = "upstream",
-                                       "S1" = "upstream",
-                                       "S2" = "downstream"),
-           startDateTime = lubridate::with_tz(startDateTime, tz = "UTC")) %>%
+    mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
+           startDateTime = round_date(startDateTime, unit = "minute")) %>%
     rename(datetime_UTC = startDateTime, watertemp_C = surfWaterTempMean,
            location = horizontalPosition)
+  temp_data$location <-
+    str_replace_all(temp_data$location,
+                    c("100|101|110|S1" = "upstream",
+                      "102|200|S2" = "downstream"))
+
 
   # Format air pressure
   press_data <-
     barometer$BP_1min %>%
     select(siteID, horizontalPosition, startDateTime, staPresMean) %>%
     mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
-           horizontalPosition = recode(horizontalPosition,
-                                       "101" = "upstream",
-                                       "110" = "upstream",
-                                       "100" = "upstream",
-                                       "102" = "downstream",
-                                       "200" = "downstream",
-                                       "101" = "upstream",
-                                       "S1" = "upstream",
-                                       "S2" = "downstream")) %>%
+           startDateTime = round_date(startDateTime, unit = "minute")) %>%
     rename(datetime_UTC = startDateTime, pressure_kPa = staPresMean,
            location = horizontalPosition)
+  press_data$location <-
+    str_replace_all(press_data$location,
+                    c("100|101|110|S1" = "upstream",
+                      "102|200|S2" = "downstream"))
 
   # Format discharge and water depth
   if(!all(is.na(discharge))){
@@ -135,22 +143,16 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
       select(siteID, endDate, stationHorizontalID, equivalentStage,
              maxpostDischarge) %>%
       mutate(endDate = lubridate::with_tz(endDate, tz = "UTC"),
-             stationHorizontalID = recode(stationHorizontalID,
-                                          "101" = "upstream",
-                                          "110" = "upstream",
-                                          "100" = "upstream",
-                                          "102" = "downstream",
-                                          "200" = "downstream",
-                                          "132" = "downstream",
-                                          "131" = "downstream",
-                                          "101" = "upstream",
-                                          "S1" = "upstream",
-                                          "S2" = "downstream"),
+             endDate = round_date(endDate, unit = "minute"),
              # convert discharge, measured as L/s, to m3/s
              maxpostDischarge = maxpostDischarge / 1000) %>%
       rename(datetime_UTC = endDate, depth_m = equivalentStage,
              discharge_m3s = maxpostDischarge,
              location = stationHorizontalID)
+    discharge_data$location <-
+      str_replace_all(discharge_data$location,
+                      c("100|101|110|S1" = "upstream",
+                        "102|131|132|200|S2" = "downstream"))
   }
 
   # Format light
@@ -158,17 +160,13 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
     par$PARPAR_1min %>%
     select(siteID, horizontalPosition, startDateTime, PARMean) %>%
     mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
-           horizontalPosition = recode(horizontalPosition,
-                                       "101" = "upstream",
-                                       "110" = "upstream",
-                                       "100" = "upstream",
-                                       "102" = "downstream",
-                                       "200" = "downstream",
-                                       "101" = "upstream",
-                                       "S1" = "upstream",
-                                       "S2" = "downstream")) %>%
+           startDateTime = round_date(startDateTime, unit = "minute")) %>%
     rename(datetime_UTC = startDateTime, par_umolm2s = PARMean,
            location = horizontalPosition)
+  par_data$location <-
+    str_replace_all(par_data$location,
+                    c("100|101|110|S1" = "upstream",
+                      "102|200|S2" = "downstream"))
 
   # Cut to just 15-min measurements
   if(interval == 15){
@@ -186,17 +184,13 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
         no3$NSW_15_minute %>%
         select(siteID, horizontalPosition, startDateTime, surfWaterNitrateMean) %>%
         mutate(startDateTime = lubridate::with_tz(startDateTime, tz = "UTC"),
-               horizontalPosition = recode(horizontalPosition,
-                                           "101" = "upstream",
-                                           "110" = "upstream",
-                                           "100" = "upstream",
-                                           "102" = "downstream",
-                                           "200" = "downstream",
-                                           "101" = "upstream",
-                                           "S1" = "upstream",
-                                           "S2" = "downstream")) %>%
+               startDateTime = round_date(startDateTime, unit = "minute")) %>%
         rename(datetime_UTC = startDateTime, location = horizontalPosition,
                nitrate_umolL = surfWaterNitrateMean)
+      no3_data$location <-
+        str_replace_all(no3_data$location,
+                        c("100|101|110|S1" = "upstream",
+                          "102|200|S2" = "downstream"))
     }
     if(!all(is.na(waterchem))){
       wc_data <-
@@ -204,17 +198,12 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
         select(siteID, namedLocation, startDate, analyte, analyteConcentration,
                analyteUnits, sampleCondition) %>%
         mutate(namedLocation = stringr::str_extract(string = namedLocation,
-                                                    pattern = "\\w\\d$"),
-               namedLocation = recode(namedLocation,
-                                      "101" = "upstream",
-                                      "110" = "upstream",
-                                      "100" = "upstream",
-                                      "102" = "downstream",
-                                      "200" = "downstream",
-                                      "101" = "upstream",
-                                      "S1" = "upstream",
-                                      "S2" = "downstream")) %>%
+                                                    pattern = "\\w\\d$")) %>%
         rename(location = namedLocation)
+      wc_data$location <-
+        str_replace_all(wc_data$location,
+                        c("100|101|110|S1" = "upstream",
+                          "102|200|S2" = "downstream"))
     }
     if(!all(is.na(aquatictransects))){
       transect_data <-
@@ -251,32 +240,21 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
     full_join(., discharge_data, by = c("siteID","location", "datetime_UTC")) %>%
     full_join(., par_data, by = c("siteID","location", "datetime_UTC"))
 
-  # Grab average sensor longitude for upstream and downstream locations
-  lat_upstream <- mean(
-    waterqual$sensor_positions_20288$locationReferenceLatitude[
-      str_detect(waterqual$sensor_positions_20288$HOR.VER, "101")]
-  )
-  long_upstream <- mean(
-    waterqual$sensor_positions_20288$locationReferenceLongitude[
-      str_detect(waterqual$sensor_positions_20288$HOR.VER, "101")]
-    )
-  elev_upstream <- mean(
-    waterqual$sensor_positions_20288$locationReferenceElevation[
-      str_detect(waterqual$sensor_positions_20288$HOR.VER, "101")]
-  )
-
-  lat_downstream <- mean(
-    waterqual$sensor_positions_20288$locationReferenceLatitude[
-      str_detect(waterqual$sensor_positions_20288$HOR.VER, "102")]
-  )
-  long_downstream <- mean(
-    waterqual$sensor_positions_20288$locationReferenceLongitude[
-      str_detect(waterqual$sensor_positions_20288$HOR.VER, "102")]
-  )
-  elev_downstream <- mean(
-    waterqual$sensor_positions_20288$locationReferenceElevation[
-      str_detect(waterqual$sensor_positions_20288$HOR.VER, "102")]
-  )
+  # Grab sensor positions during study period
+  loc_data <-
+    waterqual$sensor_positions_20288 %>%
+    mutate(positionStartDateTime = ymd_hms(positionStartDateTime),
+           positionEndDateTime = ymd_hms(positionEndDateTime)) %>%
+    filter(positionStartDateTime <= min(params$datetime_UTC)) %>%
+    filter(is.na(positionEndDateTime) |
+             positionEndDateTime >= max(params$datetime_UTC)) %>%
+    select(siteID, HOR.VER, sensorLocationID, sensorLocationDescription,
+           positionStartDateTime, positionEndDateTime,
+           locationReferenceLatitude, locationReferenceLongitude,
+           locationReferenceElevation) %>%
+    rename(latitude = locationReferenceLatitude,
+           longitude = locationReferenceLongitude,
+           elevation_m = locationReferenceElevation)
 
   # Output
   list(
@@ -284,10 +262,8 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
     no3 = if(exists("no3_data")) no3_data else NA,
     waterchemistry = if(exists("wc_data")) wc_data else NA,
     transects = if(exists("transect_data")) transect_data else NA,
-    upstream = c(latitude = lat_upstream, longitude = long_upstream,
-                 elevation = elev_upstream),
-    downstream = c(latitude = lat_downstream, longitude = long_downstream,
-                   elevation = elev_downstream)
+    locations = loc_data,
+    geomorphic = geo_data
   )
 
 }
