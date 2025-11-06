@@ -140,13 +140,13 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
   if(!all(is.na(discharge))){
     discharge_data <-
       discharge$csd_continuousDischarge %>%
-      select(siteID, endDate, stationHorizontalID, equivalentStage,
+      select(siteID, endDate, stationHorizontalID, #equivalentStage,
              maxpostDischarge) %>%
       mutate(endDate = lubridate::with_tz(endDate, tz = "UTC"),
              endDate = round_date(endDate, unit = "minute"),
              # convert discharge, measured as L/s, to m3/s
              maxpostDischarge = maxpostDischarge / 1000) %>%
-      rename(datetime_UTC = endDate, depth_m = equivalentStage,
+      rename(datetime_UTC = endDate, #depth_m = equivalentStage,
              discharge_m3s = maxpostDischarge,
              location = stationHorizontalID)
     discharge_data$location <-
@@ -245,9 +245,9 @@ request_NEON <- function(sitecode, startdate, enddate, interval = 15, expanded =
     waterqual$sensor_positions_20288 %>%
     mutate(positionStartDateTime = ymd_hms(positionStartDateTime),
            positionEndDateTime = ymd_hms(positionEndDateTime)) %>%
-    filter(positionStartDateTime <= min(params$datetime_UTC)) %>%
-    filter(is.na(positionEndDateTime) |
-             positionEndDateTime >= max(params$datetime_UTC)) %>%
+   # filter(positionStartDateTime <= min(params$datetime_UTC)) %>%
+    #filter(is.na(positionEndDateTime) |
+     #        positionEndDateTime >= max(params$datetime_UTC)) %>%
     select(siteID, HOR.VER, sensorLocationID, sensorLocationDescription,
            positionStartDateTime, positionEndDateTime,
            locationReferenceLatitude, locationReferenceLongitude,
