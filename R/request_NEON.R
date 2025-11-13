@@ -29,6 +29,8 @@
 #'    data request
 #' @param enddate YYYY-MM character string defining end year and month for
 #'    data request
+#' @param interval minute interval between observations
+#' @param expanded logical, do you want expanded data
 #'
 #' @seealso \url{https://github.com/NEONScience/NEON-utilities/neonUtilities/}
 #'    for details on \code{neonUtilities} package

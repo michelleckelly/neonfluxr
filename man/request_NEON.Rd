@@ -16,6 +16,10 @@ data request}
 
 \item{enddate}{YYYY-MM character string defining end year and month for
 data request}
+
+\item{interval}{minute interval between observations}
+
+\item{expanded}{logical, do you want expanded data}
 }
 \description{
 \code{request_NEON} communicates with NEON API to request DO,
