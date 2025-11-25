@@ -1,7 +1,7 @@
 # `neonfluxr`
 `neonfluxr` is a wrapper package for [`neonUtilities`](https://cran.r-project.org/web/packages/neonUtilities/index.html) that: 
 1. Pulls [NEON](https://data.neonscience.org/) data for two-station stream metabolism modeling
-2. Reformats that data for use with the [`fluxr`](https://github.com/michelleckelly/fluxr) modeling package
+2. Reformats that data for use with [`streamMetabolizer`](https://github.com/DOI-USGS/streamMetabolizer) or [`fluxr`](https://github.com/michelleckelly/fluxr)
 
 ## `request_NEON()`
 `request_NEON()` uses [`neonUtilities::loadByProduct`](https://cran.r-project.org/web/packages/neonUtilities/refman/neonUtilities.html#loadByProduct) to request [water quality](https://data.neonscience.org/data-products/DP1.20288.001), [surface water temperature](https://data.neonscience.org/data-products/DP1.20053.001), [photosynthetically active radiation](https://data.neonscience.org/data-products/DP1.00024.001), [continuous discharge](https://data.neonscience.org/data-products/DP4.00130.001), and [barometric pressure](https://data.neonscience.org/data-products/DP1.00004.001) data products from the NEON API for a specified site and dates. 
@@ -18,5 +18,5 @@ Any missing data is filled using an ARIMA model (check out the documentation for
 
 K600 and travel time between sensor stations are extrapolated for each time point using the relationship between field measurements and discharge 
 
-Column names and formatting are changed to jive with `streamMetabolizer`'s requirements for metabolism modeling
+Column names and formatting are changed to jive with `streamMetabolizer` and `fluxr`'s requirements for metabolism modeling
 
